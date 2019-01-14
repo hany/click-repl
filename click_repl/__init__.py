@@ -2,6 +2,7 @@ from collections import defaultdict
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.shortcuts import prompt
+from prompt_toolkit.styles import Style
 import click
 import click._bashcomplete
 import click.parser
@@ -83,8 +84,9 @@ _register_internal_command(
 
 
 class ClickCompleter(Completer):
-    def __init__(self, cli):
+    def __init__(self, cli, styles):
         self.cli = cli
+        self.styles = styles
 
     def get_completions(self, document, complete_event=None):
         # Code analogous to click._bashcomplete.do_complete
@@ -119,13 +121,15 @@ class ClickCompleter(Completer):
                     for o in options:
                         choices.append(
                             Completion(
-                                text_type(o), -len(incomplete), display_meta=param.help
+                                text_type(o), -len(incomplete), display_meta=param.help,
+                                style=self.styles['option']
                             )
                         )
             elif isinstance(param, click.Argument):
                 if isinstance(param.type, click.Choice):
                     for choice in param.type.choices:
-                        choices.append(Completion(text_type(choice), -len(incomplete)))
+                        choices.append(Completion(text_type(choice), -len(incomplete),
+                                                  style=self.styles['argument']))
 
         if isinstance(ctx.command, click.MultiCommand):
             for name in ctx.command.list_commands(ctx):
@@ -135,6 +139,7 @@ class ClickCompleter(Completer):
                         text_type(name),
                         -len(incomplete),
                         display_meta=getattr(command, "short_help"),
+                        style=self.styles['command'],
                     )
                 )
 
@@ -143,7 +148,7 @@ class ClickCompleter(Completer):
                 yield item
 
 
-def bootstrap_prompt(prompt_kwargs, group):
+def bootstrap_prompt(prompt_kwargs, group, styles):
     """
     Bootstrap prompt_toolkit kwargs or use user defined values.
 
@@ -153,7 +158,7 @@ def bootstrap_prompt(prompt_kwargs, group):
 
     defaults = {
         "history": InMemoryHistory(),
-        "completer": ClickCompleter(group),
+        "completer": ClickCompleter(group, styles),
         "message": u"> ",
     }
 
@@ -170,6 +175,7 @@ def repl(  # noqa: C901
     prompt_kwargs=None,
     allow_system_commands=True,
     allow_internal_commands=True,
+    styles=None
 ):
     """
     Start an interactive shell. All subcommands are available in it.
@@ -187,6 +193,13 @@ def repl(  # noqa: C901
     group = group_ctx.command
     isatty = sys.stdin.isatty()
 
+    if styles is None:
+        styles = {
+            'command': 'ansiblack',
+            'option': 'ansiblack',
+            'argument': 'ansiblack'
+        }
+
     # Delete the REPL command from those available, as we don't want to allow
     # nesting REPLs (note: pass `None` to `pop` as we don't want to error if
     # REPL command already not present for some reason).
@@ -201,7 +214,7 @@ def repl(  # noqa: C901
         available_commands = group_ctx.command.commands
     available_commands.pop(repl_command_name, None)
 
-    prompt_kwargs = bootstrap_prompt(prompt_kwargs, group)
+    prompt_kwargs = bootstrap_prompt(prompt_kwargs, group, styles)
 
     if isatty:
 
@@ -290,3 +303,4 @@ def handle_internal_commands(command):
         target = _get_registered_target(command[1:], default=None)
         if target:
             return target()
+
