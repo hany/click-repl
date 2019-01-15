@@ -2,7 +2,6 @@ from collections import defaultdict
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.history import InMemoryHistory
 from prompt_toolkit.shortcuts import prompt
-from prompt_toolkit.styles import Style
 import click
 import click._bashcomplete
 import click.parser
@@ -84,9 +83,13 @@ _register_internal_command(
 
 
 class ClickCompleter(Completer):
-    def __init__(self, cli, styles):
+    def __init__(self, cli, styles=None):
         self.cli = cli
-        self.styles = styles
+        self.styles = styles if styles is not None else {
+            'command': '',
+            'argument': '',
+            'option': ''
+        }
 
     def get_completions(self, document, complete_event=None):
         # Code analogous to click._bashcomplete.do_complete
@@ -98,7 +101,7 @@ class ClickCompleter(Completer):
             return
 
         cursor_within_command = (
-            document.text_before_cursor.rstrip() == document.text_before_cursor
+                document.text_before_cursor.rstrip() == document.text_before_cursor
         )
 
         if args and cursor_within_command:
@@ -148,10 +151,11 @@ class ClickCompleter(Completer):
                 yield item
 
 
-def bootstrap_prompt(prompt_kwargs, group, styles):
+def bootstrap_prompt(prompt_kwargs, group, styles=None):
     """
     Bootstrap prompt_toolkit kwargs or use user defined values.
 
+    :param styles: Optional dictionary with 'command', 'argument' and 'option' style names
     :param prompt_kwargs: The user specified prompt kwargs.
     """
     prompt_kwargs = prompt_kwargs or {}
@@ -171,15 +175,16 @@ def bootstrap_prompt(prompt_kwargs, group, styles):
 
 
 def repl(  # noqa: C901
-    old_ctx,
-    prompt_kwargs=None,
-    allow_system_commands=True,
-    allow_internal_commands=True,
-    styles=None
+        old_ctx,
+        prompt_kwargs=None,
+        allow_system_commands=True,
+        allow_internal_commands=True,
+        styles=None
 ):
     """
     Start an interactive shell. All subcommands are available in it.
 
+    :param styles: Optional dictionary with 'command', 'argument' and 'option' style names
     :param old_ctx: The current Click context.
     :param prompt_kwargs: Parameters passed to
         :py:func:`prompt_toolkit.shortcuts.prompt`.
